@@ -1,0 +1,50 @@
+/* style.css */
+
+/* Toggle Container */
+.view-toggle {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  
+  /* Toggle Buttons */
+  .toggle-button {
+    padding: 5px 10px;
+    cursor: pointer;
+    background-color: #f0f0f0;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  
+  .toggle-button:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .toggle-button.active {
+    background-color: #007bff;
+    color: white;
+  }
+  
+  /* Custom View Containers */
+  .custom-view {
+    display: none; /* Hidden by default */
+    padding: 10px;
+    border-top: 1px solid #ccc;
+  }
+  
+  /* Example Styling for View Content */
+  .custom-view p {
+    margin: 0;
+    font-size: 14px;
+  }
+  
+  .custom-view ul {
+    list-style-type: disc;
+    padding-left: 20px;
+  }
+  
+  .custom-view li {
+    margin: 5px 0;
+  }
+  

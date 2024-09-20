@@ -1,0 +1,47 @@
+{
+    "manifest_version": 2,
+    "name": "Paradigmatic Categories",
+    "version": "1.0",
+    "description": "Allows users to assign Paradigms and Categories to collections and tags.",
+    "author": "Alex Jreisat Plus",
+    "icons": {
+        "16": "src/ui/icons/toolbar-icon-16.png",
+        "32": "src/ui/icons/toolbar-icon-32.png",
+        "48": "src/ui/icons/toolbar-icon-48.png",
+        "96": "src/ui/icons/toolbar-icon-96.png",
+        "128": "src/ui/icons/toolbar-icon-128.png"
+    },
+    "applications": {
+        "zotero": {
+            "id": "paracate@ajreiplus.com",
+            "strict_min_version": "7.0",
+            "strict_max_version": "7.0.*",
+            "update_url": "https://example.com/updates.xml"
+        }
+    },
+    "permissions": [
+        "storage"
+    ],
+    "background": {
+        "scripts": [
+            "src/background/background.js"
+        ]
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "resource://zotero/content/*"
+            ],
+            "js": [
+                "src/content_scripts/tagPanelModifier.js"
+            ],
+            "css": [
+                "src/ui/styles/style.css"
+            ]
+        }
+    ],
+    "web_accessible_resources": [
+        "src/ui/panels/addCategoryPanel.html",
+        "src/utils/categoryManager.js"
+    ]
+  }  
