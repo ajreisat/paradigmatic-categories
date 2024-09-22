@@ -250,7 +250,7 @@ function openAddCategoryPanel() {
     addButton.addEventListener('click', () => {
       const categoryName = categoryNameInput.value.trim();
       if (validateCategoryName(categoryName)) {
-        // Direct call to categoryManager instead of chrome.runtime
+        // Direct call to categoryManager
         const success = categoryManager.createCategory(categoryName);
         if (success) {
           Services.console.logStringMessage(`Category "${categoryName}" added successfully.`);
