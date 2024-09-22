@@ -26,7 +26,7 @@ async function startup({ id, version, resourceURI, rootURI }, reason) {
 
   // Load the background script within this shared context
   Services.scriptloader.loadSubScript(`${rootURI}/src/background/background.js`, ctx);
-  Services.scriptloader.loadSubScript(`${rootURI}/src/tagPanelModifier.js`, ctx);
+  Services.scriptloader.loadSubScript(`${rootURI}/src/content_scripts/tagPanelModifier.js`, ctx);
 
   // Hook to be run on plugin startup
   Zotero.ParadigmaticCategories?.hooks.onStartup();

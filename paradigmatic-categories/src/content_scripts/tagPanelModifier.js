@@ -1,36 +1,69 @@
 // tagPanelModifier.js
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Wait for Zotero's UI to load
-  setTimeout(() => {
-    Services.console.logStringMessage('--tagPanelModifier.js loaded.');
-    initializeToggle();
-    addItemTagPanelButton();
-  }, 1000);
-});
+Services.console.logStringMessage('--tagPanelModifier.js script started.');
 
-function initializeToggle() {
+// tagPanelModifier.js
+
+// Ensure Zotero is available
+if (typeof Zotero === 'undefined' || typeof Zotero.getMainWindow !== 'function') {
+  console.error('Zotero is not available or Zotero.getMainWindow is undefined.');
+} else {
+  // Get Zotero's main window
+  const mainWindow = Zotero.getMainWindow();
+
+  if (!mainWindow) {
+    console.error('Unable to obtain Zotero\'s main window.');
+  } else {
+    // Function to initialize the plugin once the document is ready
+    function initializePlugin(doc) {
+      Services.console.logStringMessage('--tagPanelModifier.js loaded.');
+      initializeToggle(doc);  // Pass document to the functions that need it
+      addItemTagPanelButton(doc); // Pass document to the functions that need it
+    }
+
+    // Check if the document is already loaded
+    if (mainWindow.document.readyState === 'complete' || mainWindow.document.readyState === 'interactive') {
+      // Document is already ready
+      initializePlugin(mainWindow.document);
+    } else {
+      // Wait for the main window's DOM to be fully loaded
+      mainWindow.addEventListener('DOMContentLoaded', () => {
+        // Use a timeout to ensure all UI elements are rendered
+        setTimeout(() => {
+          try {
+            const doc = mainWindow.document;
+            initializePlugin(doc);
+          } catch (error) {
+            Services.console.logStringMessage(`Error accessing main window's document: ${error}`);
+          }
+        }, 1000); // Adjust the timeout as needed
+      });
+    }
+  }
+}
+
+function initializeToggle(doc) {
   try {
     // Locate the tag panel container
-    const tagPanel = document.querySelector('.tag-selector'); // Verify this selector
+    const tagPanel = doc.querySelector('.tag-selector'); // Verify this selector
     if (!tagPanel) {
       Services.console.logStringMessage('Tag panel not found.');
       return;
     }
 
     // Create toggle container
-    const toggleContainer = document.createElement('div');
+    const toggleContainer = doc.createElement('div');
     toggleContainer.className = 'view-toggle';
     Services.console.logStringMessage('--Toggle container created.');
 
     // Create toggle buttons
-    const tagViewBtn = createToggleButton('Tag View', 'tag');
+    const tagViewBtn = createToggleButton('Tag View', 'tag', doc);
     Services.console.logStringMessage('--Tag View button was generated.');
 
-    const categoryViewBtn = createToggleButton('Category View', 'category');
+    const categoryViewBtn = createToggleButton('Category View', 'category', doc);
     Services.console.logStringMessage('--Category View button was generated.');
 
-    const paradigmViewBtn = createToggleButton('Paradigm View', 'paradigm');
+    const paradigmViewBtn = createToggleButton('Paradigm View', 'paradigm', doc);
     Services.console.logStringMessage('--Paradigm View button was generated.');
 
     // Append buttons to toggle container
@@ -39,7 +72,7 @@ function initializeToggle() {
     toggleContainer.appendChild(paradigmViewBtn);
 
     // Append the new feature toggle button
-    const newFeatureToggleButton = createToggleButton('My New Feature', 'new-feature');
+    const newFeatureToggleButton = createToggleButton('My New Feature', 'new-feature', doc);
     toggleContainer.appendChild(newFeatureToggleButton);
     Services.console.logStringMessage('--My New Feature toggle button was generated.');
 
@@ -55,9 +88,9 @@ function initializeToggle() {
     }
 
     // Add event listeners
-    tagViewBtn.addEventListener('click', () => switchView('tag'));
-    categoryViewBtn.addEventListener('click', () => switchView('category'));
-    paradigmViewBtn.addEventListener('click', () => switchView('paradigm'));
+    tagViewBtn.addEventListener('click', () => switchView('tag', doc));
+    categoryViewBtn.addEventListener('click', () => switchView('category', doc));
+    paradigmViewBtn.addEventListener('click', () => switchView('paradigm', doc));
     newFeatureToggleButton.addEventListener('click', () => {
       Services.console.logStringMessage('My New Feature toggle button clicked!');
       alert('My New Feature toggle button clicked!');
@@ -67,14 +100,14 @@ function initializeToggle() {
     // Load persisted view or default to 'tag'
     const savedView = Zotero.Prefs.get('extensions.paracate.selectedView') || 'tag';
     Services.console.logStringMessage(`--Loaded saved view: ${savedView}`);
-    switchView(savedView);
+    switchView(savedView, doc);
   } catch (error) {
     Services.console.logStringMessage(`Error in initializeToggle: ${error}`);
   }
 }
 
-function createToggleButton(label, view) {
-  const button = document.createElement('button');
+function createToggleButton(label, view, doc) {
+  const button = doc.createElement('button');
   button.innerText = label;
   button.id = `toggle-${view}-view`;
   button.className = 'toggle-button';
@@ -86,17 +119,17 @@ function createToggleButton(label, view) {
 }
 
 // Function to add a button to the item tag panel
-function addItemTagPanelButton() {
+function addItemTagPanelButton(doc) {
   try {
     // Locate the item tag panel
-    let itemTagPanel = Zotero.getMainWindow().document.getElementById('zotero-tagselector');
+    let itemTagPanel = doc.getElementById('zotero-tagselector');
     if (!itemTagPanel) {
       Services.console.logStringMessage('Item Tag Panel not found.');
       return;
     }
 
     // Create a new button for the item tag panel
-    let newFeatureItemPanelButton = document.createElement('button');
+    let newFeatureItemPanelButton = doc.createElement('button');
     newFeatureItemPanelButton.innerText = 'New Feature';
     newFeatureItemPanelButton.id = 'new-feature-button-item-panel';
     newFeatureItemPanelButton.classList.add('zotero-tagpanel-button'); // Optional: Add class for styling
@@ -117,9 +150,9 @@ function addItemTagPanelButton() {
   }
 }
 
-function switchView(view) {
+function switchView(view, doc) {
   try {
-    const tagPanel = document.querySelector('.tag-selector'); // Verify this selector
+    const tagPanel = doc.querySelector('.tag-selector'); // Verify this selector
     if (!tagPanel) {
       Services.console.logStringMessage('Tag panel not found in switchView.');
       return;
@@ -132,21 +165,22 @@ function switchView(view) {
     });
 
     // Remove active class from all buttons
-    document.querySelectorAll('.view-toggle .toggle-button').forEach(btn => {
+    const toggleButtons = tagPanel.querySelectorAll('.view-toggle .toggle-button');
+    toggleButtons.forEach(btn => {
       btn.classList.remove('active');
     });
 
     // Show selected view
     let viewContent = tagPanel.querySelector(`.custom-view[data-view="${view}"]`);
     if (!viewContent) {
-      viewContent = createViewContent(view);
+      viewContent = createViewContent(view, doc);
       tagPanel.appendChild(viewContent);
       Services.console.logStringMessage(`--Created new view content for: ${view}`);
     }
     viewContent.style.display = 'block';
 
     // Add active class to the clicked button
-    const activeButton = document.querySelector(`#toggle-${view}-view`);
+    const activeButton = tagPanel.querySelector(`#toggle-${view}-view`);
     if (activeButton) {
       activeButton.classList.add('active');
       Services.console.logStringMessage(`--Active view set to: ${view}`);
@@ -160,8 +194,8 @@ function switchView(view) {
   }
 }
 
-function createViewContent(view) {
-  const container = document.createElement('div');
+function createViewContent(view, doc) {
+  const container = doc.createElement('div');
   container.className = 'custom-view';
   container.setAttribute('data-view', view);
 
@@ -180,8 +214,8 @@ function createViewContent(view) {
       </div>
     `;
     Services.console.logStringMessage('--Category View content created.');
-    loadCategoryView(container.querySelector('#category-list'));
-    addCategoryButtonListener(container.querySelector('#open-add-category'));
+    loadCategoryView(container.querySelector('#category-list'), doc);
+    addCategoryButtonListener(container.querySelector('#open-add-category'), container, doc);
   } else if (view === 'paradigm') {
     // Render paradigm view
     container.innerHTML = '<p>Paradigm View Content</p>'; // Placeholder for future implementation
@@ -191,7 +225,7 @@ function createViewContent(view) {
   return container;
 }
 
-function loadCategoryView(listElement) {
+function loadCategoryView(listElement, doc) {
   try {
     // Direct call to categoryManager (assumed to be in context)
     const categories = categoryManager.getAllCategories(); // Direct function call
@@ -203,7 +237,7 @@ function loadCategoryView(listElement) {
 
     listElement.innerHTML = ''; // Clear existing list
     categories.forEach(cat => {
-      const listItem = document.createElement('li');
+      const listItem = doc.createElement('li');
       listItem.innerText = cat;
       listElement.appendChild(listItem);
     });
@@ -213,13 +247,13 @@ function loadCategoryView(listElement) {
   }
 }
 
-function addCategoryButtonListener(button) {
+function addCategoryButtonListener(button, container, doc) {
   button.addEventListener('click', () => {
-    openAddCategoryPanel();
+    openAddCategoryPanel(container, doc);
   });
 }
 
-function openAddCategoryPanel() {
+function openAddCategoryPanel(container, doc) {
   try {
     // Inject the addCategoryPanel.html content
     const panelHTML = `
@@ -232,11 +266,11 @@ function openAddCategoryPanel() {
         </div>
       </div>
     `;
-    const tagPanel = document.querySelector('.tag-selector'); // Verify this selector
+    const tagPanel = doc.querySelector('.tag-selector'); // Verify this selector
     const existingPanel = tagPanel.querySelector('.add-category-panel');
     if (existingPanel) return; // Prevent multiple panels
 
-    const panelContainer = document.createElement('div');
+    const panelContainer = doc.createElement('div');
     panelContainer.className = 'add-category-panel-container';
     panelContainer.innerHTML = panelHTML;
     tagPanel.appendChild(panelContainer);
@@ -257,7 +291,7 @@ function openAddCategoryPanel() {
           alert('Category added successfully.');
           closeAddCategoryPanel(panelContainer);
           // Reload categories
-          loadCategoryView(panelContainer.parentElement.querySelector('#category-list'));
+          loadCategoryView(container.querySelector('#category-list'), doc);
         } else {
           Services.console.logStringMessage(`Category "${categoryName}" already exists.`);
           alert('Category already exists.');
