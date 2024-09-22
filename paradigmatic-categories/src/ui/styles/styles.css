@@ -7,6 +7,37 @@
     margin-bottom: 10px;
   }
   
+  .toggle-button {
+    margin: 5px;
+    padding: 5px 10px;
+    background-color: #f5f5f5;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  
+  .toggle-button.active {
+    background-color: #d0d0d0;
+  }
+  
+  .zotero-tagpanel-button {
+    margin: 5px;
+    padding: 5px 10px;
+    background-color: #e0e0e0;
+    border: 1px solid #bbb;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  
+  .add-category-panel {
+    margin-top: 10px;
+  }
+  
+  .add-category-panel .buttons button {
+    margin-right: 5px;
+  }
+  
+
   /* Toggle Buttons */
   .toggle-button {
     padding: 5px 10px;
