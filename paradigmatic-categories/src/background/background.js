@@ -1,36 +1,27 @@
-// background.js
+// Access categoryManager from the shared context
+let categoryManager = this.categoryManager;
+Zotero.debug('categoryManager loaded successfully.');
 
-// Assign globalized context (_globalThis) to local ctx
-ctx = _globalThis;
+// Assuming categoryManager functions are now available
+async function manageCategories() {
+  if (typeof categoryManager !== 'undefined') {
+    try {
+      let success = await categoryManager.createCategory("MyCategory");
+      if (success) {
+        Zotero.debug('Category "MyCategory" added successfully.');
+      } else {
+        Zotero.debug('Category "MyCategory" already exists or an error occurred.');
+      }
 
-Services.console.logStringMessage('Log message here');
-Services.console.logStringMessage(JSON.stringify(ctx.rootURI));  // Access the shared rootURI variable
-Services.console.logStringMessage(JSON.stringify(ctx.chromeHandle));  // Access chromeHandle from ctx
-
-// Load the categoryManager script
-Services.scriptloader.loadSubScript(`${ctx.rootURI}/src/utils/categoryManager.js`, ctx);
-
-// Ensure categoryManager is loaded
-Services.console.logStringMessage(JSON.stringify(ctx.categoryManager));  // This should now log the categoryManager object
-
-// Now we can use categoryManager for handling actions
-
-// Example: Adding a new category called "MyCategory"
-ctx.categoryManager.createCategory("MyCategory", (success) => {
-  if (success) {
-    Services.console.logStringMessage('Category "MyCategory" added successfully.');
+      let categories = await categoryManager.getAllCategories();
+      Zotero.debug(`Categories: ${JSON.stringify(categories)}`);
+    } catch (error) {
+      Zotero.debug(`Error managing categories: ${error}`);
+    }
   } else {
-    Services.console.logStringMessage('Category "MyCategory" already exists.');
+    Zotero.debug('Error: categoryManager is not defined after loading.');
   }
-});
+}
 
-// After adding the category, you can call getAllCategories to check if it's there
-ctx.categoryManager.getAllCategories()
-    .then(categories => {
-        Services.console.logStringMessage(`Categories: ${JSON.stringify(categories)}`);
-    })
-    .catch(error => {
-        Services.console.logStringMessage(`Error fetching categories: ${error}`);
-    });
-
-// Handle actions or other logic using direct method calls, hooks, or events
+// Call the function to manage categories
+manageCategories();

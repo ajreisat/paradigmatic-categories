@@ -1,24 +1,23 @@
 // tagPanelModifier.js
 
-Services.console.logStringMessage('--tagPanelModifier.js script started.');
-
-// tagPanelModifier.js
+// Early Logging to Confirm Script Execution
+Zotero.debug('--tagPanelModifier.js script started.');
 
 // Ensure Zotero is available
 if (typeof Zotero === 'undefined' || typeof Zotero.getMainWindow !== 'function') {
-  console.error('Zotero is not available or Zotero.getMainWindow is undefined.');
+  Zotero.debug('Zotero is not available or Zotero.getMainWindow is undefined.');
 } else {
   // Get Zotero's main window
   const mainWindow = Zotero.getMainWindow();
 
   if (!mainWindow) {
-    console.error('Unable to obtain Zotero\'s main window.');
+    Zotero.debug('Unable to obtain Zotero\'s main window.');
   } else {
     // Function to initialize the plugin once the document is ready
     function initializePlugin(doc) {
-      Services.console.logStringMessage('--tagPanelModifier.js loaded.');
-      initializeToggle(doc);  // Pass document to the functions that need it
-      addItemTagPanelButton(doc); // Pass document to the functions that need it
+      Zotero.debug('--tagPanelModifier.js loaded.');
+      initializeToggleButtons(doc); // Pass document to the functions that need it
+      createCategorySelectorPane(doc); // Pass document to the functions that need it
     }
 
     // Check if the document is already loaded
@@ -28,13 +27,12 @@ if (typeof Zotero === 'undefined' || typeof Zotero.getMainWindow !== 'function')
     } else {
       // Wait for the main window's DOM to be fully loaded
       mainWindow.addEventListener('DOMContentLoaded', () => {
-        // Use a timeout to ensure all UI elements are rendered
         setTimeout(() => {
           try {
             const doc = mainWindow.document;
             initializePlugin(doc);
           } catch (error) {
-            Services.console.logStringMessage(`Error accessing main window's document: ${error}`);
+            Zotero.debug(`Error accessing main window's document: ${error}`);
           }
         }, 1000); // Adjust the timeout as needed
       });
@@ -42,284 +40,330 @@ if (typeof Zotero === 'undefined' || typeof Zotero.getMainWindow !== 'function')
   }
 }
 
-function initializeToggle(doc) {
+/**
+ * Initializes the toggle buttons in the tag-selector pane.
+ * @param {Document} doc - The Zotero main window document.
+ */
+async function initializeToggleButtons(doc) {
   try {
-    // Locate the tag panel container
-    const tagPanel = doc.querySelector('.tag-selector'); // Verify this selector
-    if (!tagPanel) {
-      Services.console.logStringMessage('Tag panel not found.');
+    // Locate the tag selector
+    const tagSelector = doc.querySelector('.tag-selector');
+    if (!tagSelector) {
+      Zotero.debug('Tag selector not found.');
       return;
     }
 
-    // Create toggle container
+    // Create a container for the toggle buttons
     const toggleContainer = doc.createElement('div');
-    toggleContainer.className = 'view-toggle';
-    Services.console.logStringMessage('--Toggle container created.');
+    toggleContainer.className = 'view-toggle-container';
+    toggleContainer.style.marginBottom = '10px'; // Add spacing as needed
 
-    // Create toggle buttons
+    // Create "Tag View" button
     const tagViewBtn = createToggleButton('Tag View', 'tag', doc);
-    Services.console.logStringMessage('--Tag View button was generated.');
+    Zotero.debug('--Tag View button created.');
 
+    // Create "Category View" button
     const categoryViewBtn = createToggleButton('Category View', 'category', doc);
-    Services.console.logStringMessage('--Category View button was generated.');
+    Zotero.debug('--Category View button created.');
 
-    const paradigmViewBtn = createToggleButton('Paradigm View', 'paradigm', doc);
-    Services.console.logStringMessage('--Paradigm View button was generated.');
-
-    // Append buttons to toggle container
+    // Append buttons to the toggle container
     toggleContainer.appendChild(tagViewBtn);
     toggleContainer.appendChild(categoryViewBtn);
-    toggleContainer.appendChild(paradigmViewBtn);
 
-    // Append the new feature toggle button
-    const newFeatureToggleButton = createToggleButton('My New Feature', 'new-feature', doc);
-    toggleContainer.appendChild(newFeatureToggleButton);
-    Services.console.logStringMessage('--My New Feature toggle button was generated.');
+    // Insert the toggle container at the top of the tag-selector pane
+    tagSelector.insertBefore(toggleContainer, tagSelector.firstChild);
+    Zotero.debug('--Toggle buttons inserted at the top of the tag-selector.');
 
-    // Insert toggle container into the tag panel
-    const filterPane = tagPanel.querySelector('.tag-selector-filter-pane');
-    if (filterPane) {
-      filterPane.insertBefore(toggleContainer, filterPane.firstChild);
-      Services.console.logStringMessage('--Toggle container added to filter pane.');
+    // Attach event listeners to the buttons
+    tagViewBtn.addEventListener('click', () => activateTagView(doc));
+    categoryViewBtn.addEventListener('click', () => activateCategoryView(doc));
+
+    // Set the default active view based on saved preference
+    const savedView = await getUserPreference('selectedView') || 'tag';
+    if (savedView === 'category') {
+      activateCategoryView(doc);
     } else {
-      // Fallback if filter pane not found
-      tagPanel.insertBefore(toggleContainer, tagPanel.firstChild);
-      Services.console.logStringMessage('--Toggle container added to tag panel.');
+      activateTagView(doc);
     }
-
-    // Add event listeners
-    tagViewBtn.addEventListener('click', () => switchView('tag', doc));
-    categoryViewBtn.addEventListener('click', () => switchView('category', doc));
-    paradigmViewBtn.addEventListener('click', () => switchView('paradigm', doc));
-    newFeatureToggleButton.addEventListener('click', () => {
-      Services.console.logStringMessage('My New Feature toggle button clicked!');
-      alert('My New Feature toggle button clicked!');
-      // Add your custom functionality here
-    });
-
-    // Load persisted view or default to 'tag'
-    const savedView = Zotero.Prefs.get('extensions.paracate.selectedView') || 'tag';
-    Services.console.logStringMessage(`--Loaded saved view: ${savedView}`);
-    switchView(savedView, doc);
   } catch (error) {
-    Services.console.logStringMessage(`Error in initializeToggle: ${error}`);
+    Zotero.debug(`Error in initializeToggleButtons: ${error}`);
   }
 }
 
+/**
+ * Creates a toggle button.
+ * @param {string} label - The button label.
+ * @param {string} view - The view associated with the button ('tag' or 'category').
+ * @param {Document} doc - The Zotero main window document.
+ * @returns {HTMLButtonElement} - The created button element.
+ */
 function createToggleButton(label, view, doc) {
   const button = doc.createElement('button');
   button.innerText = label;
   button.id = `toggle-${view}-view`;
-  button.className = 'toggle-button';
-  button.addEventListener('click', () => {
-    Services.console.logStringMessage(`${label} button clicked.`);
-    // Additional custom functionality can be added here
-  });
+  button.className = 'btn btn-default toggle-button'; // Use Zotero's button classes
+  button.style.marginRight = '5px'; // Add spacing between buttons
   return button;
 }
 
-// Function to add a button to the item tag panel
-function addItemTagPanelButton(doc) {
+/**
+ * Activates the Tag View by showing the default tag-selector pane.
+ * @param {Document} doc - The Zotero main window document.
+ */
+async function activateTagView(doc) {
   try {
-    // Locate the item tag panel
-    let itemTagPanel = doc.getElementById('zotero-tagselector');
-    if (!itemTagPanel) {
-      Services.console.logStringMessage('Item Tag Panel not found.');
+    Zotero.debug('--Activating Tag View.');
+    // Show the tag-selector-list-container
+    const tagSelectorListContainer = doc.querySelector('.tag-selector-list-container');
+    const categorySelectorContainer = doc.querySelector('.category-selector-container');
+
+    if (categorySelectorContainer) {
+      categorySelectorContainer.style.display = 'none';
+    }
+
+    if (tagSelectorListContainer) {
+      tagSelectorListContainer.style.display = '';
+    }
+
+    // Update button states
+    updateButtonStates(doc, 'tag');
+
+    // Persist the selected view
+    await setUserPreference('selectedView', 'tag');
+    Zotero.debug('--Tag View activated and preference saved.');
+  } catch (error) {
+    Zotero.debug(`Error in activateTagView: ${error}`);
+  }
+}
+
+/**
+ * Activates the Category View by showing the custom category-selector pane.
+ * @param {Document} doc - The Zotero main window document.
+ */
+async function activateCategoryView(doc) {
+  try {
+    Zotero.debug('--Activating Category View.');
+    // Show the category-selector pane
+    const tagSelectorListContainer = doc.querySelector('.tag-selector-list-container');
+    const categorySelectorContainer = doc.querySelector('.category-selector-container');
+
+    if (tagSelectorListContainer) {
+      tagSelectorListContainer.style.display = 'none';
+    }
+
+    if (categorySelectorContainer) {
+      categorySelectorContainer.style.display = '';
+    } else {
+      Zotero.debug('Category selector container not found.');
+    }
+
+    // Update button states
+    updateButtonStates(doc, 'category');
+
+    // Persist the selected view
+    await setUserPreference('selectedView', 'category');
+    Zotero.debug('--Category View activated and preference saved.');
+  } catch (error) {
+    Zotero.debug(`Error in activateCategoryView: ${error}`);
+  }
+}
+
+/**
+ * Updates the active state of toggle buttons.
+ * @param {Document} doc - The Zotero main window document.
+ * @param {string} activeView - The currently active view ('tag' or 'category').
+ */
+function updateButtonStates(doc, activeView) {
+  try {
+    const tagViewBtn = doc.getElementById('toggle-tag-view');
+    const categoryViewBtn = doc.getElementById('toggle-category-view');
+
+    if (activeView === 'tag') {
+      tagViewBtn.classList.add('active');
+      categoryViewBtn.classList.remove('active');
+    } else if (activeView === 'category') {
+      categoryViewBtn.classList.add('active');
+      tagViewBtn.classList.remove('active');
+    }
+  } catch (error) {
+    Zotero.debug(`Error in updateButtonStates: ${error}`);
+  }
+}
+
+/**
+ * Creates the Category Selector Pane.
+ * @param {Document} doc - The Zotero main window document.
+ */
+function createCategorySelectorPane(doc) {
+  try {
+    // Check if the category selector already exists
+    if (doc.querySelector('.category-selector-container')) {
+      Zotero.debug('Category selector pane already exists.');
       return;
     }
 
-    // Create a new button for the item tag panel
-    let newFeatureItemPanelButton = doc.createElement('button');
-    newFeatureItemPanelButton.innerText = 'New Feature';
-    newFeatureItemPanelButton.id = 'new-feature-button-item-panel';
-    newFeatureItemPanelButton.classList.add('zotero-tagpanel-button'); // Optional: Add class for styling
-    Services.console.logStringMessage('--New Feature button for Item Tag Panel created.');
+    // Create the category selector container
+    const categorySelectorContainer = doc.createElement('div');
+    categorySelectorContainer.className = 'category-selector-container';
+    categorySelectorContainer.style.display = 'none'; // Hidden by default
 
-    // Add click event to the button
-    newFeatureItemPanelButton.addEventListener('click', function() {
-      Services.console.logStringMessage('Item Tag Panel button clicked!');
-      alert('Item Tag Panel button clicked!');
-      // Add your custom functionality here
-    });
+    // Populate the category selector pane using Zotero API
+    populateCategorySelector(categorySelectorContainer, doc);
 
-    // Append the button to the item tag panel
-    itemTagPanel.appendChild(newFeatureItemPanelButton);
-    Services.console.logStringMessage('--New Feature button appended to Item Tag Panel.');
-  } catch (error) {
-    Services.console.logStringMessage(`Error in addItemTagPanelButton: ${error}`);
-  }
-}
-
-function switchView(view, doc) {
-  try {
-    const tagPanel = doc.querySelector('.tag-selector'); // Verify this selector
-    if (!tagPanel) {
-      Services.console.logStringMessage('Tag panel not found in switchView.');
-      return;
-    }
-
-    // Hide all custom views
-    const allViews = tagPanel.querySelectorAll('.custom-view');
-    allViews.forEach(viewEl => {
-      viewEl.style.display = 'none';
-    });
-
-    // Remove active class from all buttons
-    const toggleButtons = tagPanel.querySelectorAll('.view-toggle .toggle-button');
-    toggleButtons.forEach(btn => {
-      btn.classList.remove('active');
-    });
-
-    // Show selected view
-    let viewContent = tagPanel.querySelector(`.custom-view[data-view="${view}"]`);
-    if (!viewContent) {
-      viewContent = createViewContent(view, doc);
-      tagPanel.appendChild(viewContent);
-      Services.console.logStringMessage(`--Created new view content for: ${view}`);
-    }
-    viewContent.style.display = 'block';
-
-    // Add active class to the clicked button
-    const activeButton = tagPanel.querySelector(`#toggle-${view}-view`);
-    if (activeButton) {
-      activeButton.classList.add('active');
-      Services.console.logStringMessage(`--Active view set to: ${view}`);
-    }
-
-    // Persist selected view
-    Zotero.Prefs.set('extensions.paracate.selectedView', view);
-    Services.console.logStringMessage(`--Persisted selected view: ${view}`);
-  } catch (error) {
-    Services.console.logStringMessage(`Error in switchView: ${error}`);
-  }
-}
-
-function createViewContent(view, doc) {
-  const container = doc.createElement('div');
-  container.className = 'custom-view';
-  container.setAttribute('data-view', view);
-
-  if (view === 'tag') {
-    // Render default tag view
-    container.innerHTML = '<p>Tag View Content</p>'; // Placeholder
-    Services.console.logStringMessage('--Tag View content created.');
-    // Integrate Zotero's existing tag display here if possible
-  } else if (view === 'category') {
-    // Render category view
-    container.innerHTML = `
-      <div class="category-view-content">
-        <h3>Categories</h3>
-        <ul id="category-list"></ul>
-        <button id="open-add-category">Add Category</button>
-      </div>
-    `;
-    Services.console.logStringMessage('--Category View content created.');
-    loadCategoryView(container.querySelector('#category-list'), doc);
-    addCategoryButtonListener(container.querySelector('#open-add-category'), container, doc);
-  } else if (view === 'paradigm') {
-    // Render paradigm view
-    container.innerHTML = '<p>Paradigm View Content</p>'; // Placeholder for future implementation
-    Services.console.logStringMessage('--Paradigm View content created.');
-  }
-
-  return container;
-}
-
-function loadCategoryView(listElement, doc) {
-  try {
-    // Direct call to categoryManager (assumed to be in context)
-    const categories = categoryManager.getAllCategories(); // Direct function call
-    Services.console.logStringMessage(`--Loaded categories: ${JSON.stringify(categories)}`);
-    if (categories.length === 0) {
-      listElement.innerHTML = '<li>No categories defined.</li>';
-      return;
-    }
-
-    listElement.innerHTML = ''; // Clear existing list
-    categories.forEach(cat => {
-      const listItem = doc.createElement('li');
-      listItem.innerText = cat;
-      listElement.appendChild(listItem);
-    });
-  } catch (error) {
-    Services.console.logStringMessage(`Error in loadCategoryView: ${error}`);
-    listElement.innerHTML = '<li>Error loading categories.</li>';
-  }
-}
-
-function addCategoryButtonListener(button, container, doc) {
-  button.addEventListener('click', () => {
-    openAddCategoryPanel(container, doc);
-  });
-}
-
-function openAddCategoryPanel(container, doc) {
-  try {
-    // Inject the addCategoryPanel.html content
-    const panelHTML = `
-      <div class="add-category-panel">
-        <h2>Add New Category</h2>
-        <input type="text" id="category-name" placeholder="Enter category name" maxlength="50">
-        <div class="buttons">
-          <button id="add-button">Add</button>
-          <button id="cancel-button">Cancel</button>
-        </div>
-      </div>
-    `;
-    const tagPanel = doc.querySelector('.tag-selector'); // Verify this selector
-    const existingPanel = tagPanel.querySelector('.add-category-panel');
-    if (existingPanel) return; // Prevent multiple panels
-
-    const panelContainer = doc.createElement('div');
-    panelContainer.className = 'add-category-panel-container';
-    panelContainer.innerHTML = panelHTML;
-    tagPanel.appendChild(panelContainer);
-    Services.console.logStringMessage('--Add Category panel injected.');
-
-    // Attach event listeners
-    const addButton = panelContainer.querySelector('#add-button');
-    const cancelButton = panelContainer.querySelector('#cancel-button');
-    const categoryNameInput = panelContainer.querySelector('#category-name');
-
-    addButton.addEventListener('click', () => {
-      const categoryName = categoryNameInput.value.trim();
-      if (validateCategoryName(categoryName)) {
-        // Direct call to categoryManager
-        const success = categoryManager.createCategory(categoryName);
-        if (success) {
-          Services.console.logStringMessage(`Category "${categoryName}" added successfully.`);
-          alert('Category added successfully.');
-          closeAddCategoryPanel(panelContainer);
-          // Reload categories
-          loadCategoryView(container.querySelector('#category-list'), doc);
-        } else {
-          Services.console.logStringMessage(`Category "${categoryName}" already exists.`);
-          alert('Category already exists.');
-        }
+    // Insert the category selector pane into the tag-selector
+    const tagSelector = doc.querySelector('.tag-selector');
+    if (tagSelector) {
+      // Insert after the toggle buttons
+      if (tagSelector.firstChild.nextSibling) {
+        tagSelector.insertBefore(categorySelectorContainer, tagSelector.firstChild.nextSibling);
       } else {
-        Services.console.logStringMessage('Invalid category name entered.');
-        alert('Invalid category name. Please ensure it is unique and within character limits.');
+        tagSelector.appendChild(categorySelectorContainer);
       }
-    });
-
-    cancelButton.addEventListener('click', () => {
-      Services.console.logStringMessage('--Add Category panel canceled.');
-      closeAddCategoryPanel(panelContainer);
-    });
+      Zotero.debug('--Category selector pane created and appended.');
+    } else {
+      Zotero.debug('Tag selector not found when creating category selector pane.');
+    }
   } catch (error) {
-    Services.console.logStringMessage(`Error in openAddCategoryPanel: ${error}`);
+    Zotero.debug(`Error in createCategorySelectorPane: ${error}`);
   }
 }
 
-function validateCategoryName(name) {
-  const maxLength = 50;
-  const regex = /^[a-zA-Z0-9\s\-_.]+$/; // Alphanumeric and basic punctuation
-  const isValid = name.length > 0 && name.length <= maxLength && regex.test(name);
-  Services.console.logStringMessage(`--validateCategoryName("${name}"): ${isValid}`);
-  return isValid;
+/**
+ * Populates the Category Selector Pane with categories.
+ * @param {HTMLDivElement} container - The category selector container element.
+ * @param {Document} doc - The Zotero main window document.
+ */
+async function populateCategorySelector(container, doc) {
+  try {
+    // Fetch categories using categoryManager
+    const categories = await getCategories();
+
+    // Create the category list
+    const categoryList = doc.createElement('ul');
+    categoryList.className = 'category-selector-list';
+
+    if (categories.length === 0) {
+      const emptyItem = doc.createElement('li');
+      emptyItem.innerText = 'No categories defined.';
+      categoryList.appendChild(emptyItem);
+    } else {
+      categories.forEach(category => {
+        const listItem = doc.createElement('li');
+        listItem.className = 'category-item';
+        listItem.innerText = category;
+        listItem.setAttribute('role', 'button');
+        listItem.setAttribute('tabindex', '0');
+        listItem.setAttribute('aria-pressed', 'false');
+        // Add event listener for category selection if needed
+        listItem.addEventListener('click', () => {
+          // Implement category selection logic
+          Zotero.debug(`Category "${category}" clicked.`);
+          // Example: Filter items based on category
+          filterItemsByCategory(category);
+        });
+        categoryList.appendChild(listItem);
+      });
+    }
+
+    // Append the list to the container
+    container.appendChild(categoryList);
+
+    // Optionally, add a filter input similar to the tag filter
+    const filterContainer = doc.createElement('div');
+    filterContainer.className = 'category-selector-filter-container';
+    filterContainer.style.marginTop = '10px';
+
+    const filterInputGroup = doc.createElement('div');
+    filterInputGroup.className = 'input-group input';
+
+    const filterInput = doc.createElement('input');
+    filterInput.className = 'category-selector-filter form-control';
+    filterInput.type = 'search';
+    filterInput.placeholder = 'Filter Categories';
+    filterInput.setAttribute('aria-label', 'Filter Categories');
+
+    // Add event listener for filtering categories
+    filterInput.addEventListener('input', () => {
+      const filterValue = filterInput.value.toLowerCase();
+      const items = categoryList.querySelectorAll('.category-item');
+      items.forEach(item => {
+        if (item.innerText.toLowerCase().includes(filterValue)) {
+          item.style.display = 'list-item';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+
+    filterInputGroup.appendChild(filterInput);
+    filterContainer.appendChild(filterInputGroup);
+    container.appendChild(filterContainer);
+
+    Zotero.debug('--Category selector pane populated.');
+  } catch (error) {
+    Zotero.debug(`Error in populateCategorySelector: ${error}`);
+  }
 }
 
-function closeAddCategoryPanel(panelContainer) {
-  panelContainer.remove();
-  Services.console.logStringMessage('--Add Category panel closed.');
+/**
+ * Retrieves categories using categoryManager.
+ * @returns {Promise<string[]>} - A promise that resolves to an array of category names.
+ */
+async function getCategories() {
+  try {
+    // Access categoryManager from the shared context
+    let categoryManager = this.categoryManager;
+
+    if (!categoryManager) {
+      Zotero.debug('categoryManager is not available.');
+      return [];
+    }
+
+    let categories = await categoryManager.getAllCategories();
+    return categories;
+
+  } catch (error) {
+    Zotero.debug(`Error in getCategories: ${error}`);
+    return [];
+  }
+}
+
+/**
+ * Filters Zotero items based on the selected category.
+ * @param {string} category - The selected category name.
+ */
+async function filterItemsByCategory(category) {
+  try {
+    // Implement the logic to filter items by category using Zotero's API
+    const search = new Zotero.Search();
+    search.addCondition('tag', 'is', category);
+    const itemIDs = await search.search();
+
+    // Select the items in the items pane
+    const itemsView = Zotero.getActiveZoteroPane().getItemsView();
+    itemsView.selectItems(itemIDs);
+
+    Zotero.debug(`--Filtered ${itemIDs.length} items by category "${category}".`);
+  } catch (error) {
+    Zotero.debug(`Error in filterItemsByCategory: ${error}`);
+  }
+}
+
+/**
+ * Helper function to get a user preference.
+ * @param {string} key - The preference key.
+ * @returns {Promise<any>} - The preference value.
+ */
+async function getUserPreference(key) {
+  return Zotero.Prefs.get(`extensions.paradigmaticCategories.${key}`);
+}
+
+/**
+ * Helper function to set a user preference.
+ * @param {string} key - The preference key.
+ * @param {any} value - The preference value.
+ * @returns {Promise<void>}
+ */
+async function setUserPreference(key, value) {
+  return Zotero.Prefs.set(`extensions.paradigmaticCategories.${key}`, value);
 }

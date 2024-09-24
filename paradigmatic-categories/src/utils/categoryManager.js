@@ -1,108 +1,135 @@
 // categoryManager.js
 
-const categoriesKey = 'paradigmaticCategories';
+(async () => {
+  // Ensure 'this' refers to the shared context
+  let db;
 
-// Initialize categories in Zotero storage if not present
-function initializeCategories() {
-  let categories = Zotero.Prefs.get(categoriesKey);
-  if (!categories) {
-    Zotero.Prefs.set(categoriesKey, JSON.stringify([])); // Initialize empty array
-  }
-}
-
-// Create a new category
-function createCategory(name, callback) {
-  let categories = JSON.parse(Zotero.Prefs.get(categoriesKey) || '[]');
-  if (!categories.includes(name)) {
-    categories.push(name);
-    Zotero.Prefs.set(categoriesKey, JSON.stringify(categories));
-    callback(true);
-  } else {
-    callback(false); // Category already exists
-  }
-}
-
-// Delete a category
-function deleteCategory(name, callback) {
-  let categories = JSON.parse(Zotero.Prefs.get(categoriesKey) || '[]');
-  categories = categories.filter(cat => cat !== name);
-  Zotero.Prefs.set(categoriesKey, JSON.stringify(categories));
-  callback(true);
-}
-
-// Rename a category
-function renameCategory(oldName, newName, callback) {
-  let categories = JSON.parse(Zotero.Prefs.get(categoriesKey) || '[]');
-  const index = categories.indexOf(oldName);
-  if (index !== -1 && !categories.includes(newName)) {
-    categories[index] = newName;
-    Zotero.Prefs.set(categoriesKey, JSON.stringify(categories));
-    callback(true);
-  } else {
-    callback(false); // Old name not found or new name already exists
-  }
-}
-
-// Get all categories
-function getAllCategories() {
-  return new Promise((resolve) => {
-    let categories = JSON.parse(Zotero.Prefs.get(categoriesKey) || '[]');
-    resolve(categories);
-  });
-}
-
-// Assign a category to an item or collection
-function assignCategory(itemId, category, callback) {
-  let item = Zotero.Items.get(itemId);
-  
-  if (!item) {
-    callback(false);  // Item not found
-    return;
+  // Initialize categories in Zotero database if not present
+  async function initializeCategories() {
+    db = await Zotero.DB.getConnectionAsync();
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS paracate_categories (
+        id INTEGER PRIMARY KEY,
+        name TEXT UNIQUE
+      )
+    `);
   }
 
-  // Add the category as a tag to the item
-  let tags = item.getTags();  // Get the existing tags
-  if (!tags.includes(category)) {
-    tags.push(category);  // Add the category if not already present
-    item.setTags(tags);  // Set the updated tags
-    item.saveTx();  // Save the changes
-  }
-  
-  callback(true);  // Assignment successful
-}
-
-// Remove a category from an item or collection
-function removeCategory(itemId, category, callback) {
-  let item = Zotero.Items.get(itemId);
-
-  if (!item) {
-    callback(false);  // Item not found
-    return;
+  // Create a new category
+  async function createCategory(name) {
+    try {
+      await db.execute(`INSERT INTO paracate_categories (name) VALUES (?)`, [name]);
+      return true;
+    } catch (e) {
+      if (e.result === Components.results.NS_ERROR_STORAGE_CONSTRAINT) {
+        // Category already exists
+        return false;
+      } else {
+        Zotero.debug(`Error creating category: ${e}`);
+        throw e;
+      }
+    }
   }
 
-  // Remove the category as a tag from the item
-  let tags = item.getTags();
-  let updatedTags = tags.filter(tag => tag !== category);  // Filter out the category
-  item.setTags(updatedTags);  // Set the updated tags
-  item.saveTx();  // Save the changes
-  
-  callback(true);  // Removal successful
-}
+  // Delete a category
+  async function deleteCategory(name) {
+    try {
+      await db.execute(`DELETE FROM paracate_categories WHERE name = ?`, [name]);
+      return true;
+    } catch (e) {
+      Zotero.debug(`Error deleting category: ${e}`);
+      return false;
+    }
+  }
 
-// Initialize categories on load
-initializeCategories();
+  // Rename a category
+  async function renameCategory(oldName, newName) {
+    try {
+      await db.execute(`UPDATE paracate_categories SET name = ? WHERE name = ?`, [newName, oldName]);
+      return true;
+    } catch (e) {
+      Zotero.debug(`Error renaming category: ${e}`);
+      return false;
+    }
+  }
 
-// Export functions
-const categoryManager = {
-  createCategory,
-  deleteCategory,
-  renameCategory,
-  getAllCategories,
-  assignCategory,
-  removeCategory
-};
+  // Get all categories
+  async function getAllCategories() {
+    try {
+      let result = await db.queryAsync(`SELECT name FROM paracate_categories`);
+      return result.map(row => row.name);
+    } catch (e) {
+      Zotero.debug(`Error getting categories: ${e}`);
+      return [];
+    }
+  }
 
-// Add categoryManager to ctx if ctx exists (when loaded via loadSubScript)
-if (typeof ctx !== 'undefined') {
-  ctx.categoryManager = categoryManager;
-}
+  // Assign a category to an item
+  async function assignCategory(itemId, categoryName) {
+    try {
+      // First, check if the category exists
+      let categories = await getAllCategories();
+      if (!categories.includes(categoryName)) {
+        // Category does not exist
+        return false;
+      }
+
+      // Then, assign the category to the item
+      let item = await Zotero.Items.getAsync(itemId);
+      if (!item) {
+        // Item not found
+        return false;
+      }
+
+      // Add the category as a tag to the item
+      let tags = item.getTags().map(tag => tag.tag);
+      if (!tags.includes(categoryName)) {
+        await item.addTag(categoryName);
+        await item.saveTx();
+      }
+
+      return true;
+    } catch (e) {
+      Zotero.debug(`Error assigning category: ${e}`);
+      return false;
+    }
+  }
+
+  // Remove a category from an item
+  async function removeCategory(itemId, categoryName) {
+    try {
+      let item = await Zotero.Items.getAsync(itemId);
+      if (!item) {
+        // Item not found
+        return false;
+      }
+
+      // Remove the category tag from the item
+      let tags = item.getTags().map(tag => tag.tag);
+      if (tags.includes(categoryName)) {
+        await item.removeTag(categoryName);
+        await item.saveTx();
+      }
+
+      return true;
+    } catch (e) {
+      Zotero.debug(`Error removing category: ${e}`);
+      return false;
+    }
+  }
+
+  // Initialize categories on load
+  await initializeCategories();
+
+  // Export functions by assigning them to 'this.categoryManager'
+  this.categoryManager = {
+    createCategory,
+    deleteCategory,
+    renameCategory,
+    getAllCategories,
+    assignCategory,
+    removeCategory
+  };
+
+  Zotero.debug('--categoryManager.js initialized.');
+})();

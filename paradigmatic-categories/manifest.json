@@ -22,11 +22,7 @@
     "permissions": [
         "storage"
     ],
-    "background": {
-        "scripts": [
-            "src/background/background.js"
-        ]
-    },
+    
     "content_scripts": [
         {
             "matches": [
